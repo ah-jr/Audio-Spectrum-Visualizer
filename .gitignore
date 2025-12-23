@@ -2,6 +2,8 @@
 build/
 cmake-build-*/
 out/
+bin/
+lib/
 
 # IDE files
 .vs/
@@ -10,6 +12,10 @@ out/
 *.sln
 .idea/
 *.user
+*.suo
+*.ncb
+*.opensdf
+*.sdf
 
 # Compiled files
 *.exe
@@ -20,6 +26,9 @@ out/
 *.o
 *.a
 *.lib
+*.pdb
+*.ilk
+*.exp
 
 # CMake generated
 CMakeCache.txt
@@ -27,9 +36,17 @@ CMakeFiles/
 cmake_install.cmake
 Makefile
 compile_commands.json
+CTestTestfile.cmake
+_deps/
+install_manifest.txt
 
 # External dependencies (downloaded automatically)
 external/miniaudio.h
+external/vst3sdk/
+
+# VST3 plugin outputs
+*.vst3
+VST3/
 
 # Audio files (for testing)
 *.mp3
@@ -41,6 +58,23 @@ external/miniaudio.h
 
 # OS files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
 
+# Logs
+*.log
 
+# Backup files
+*.bak
+*.swp
+*~
+
+# Package files
+*.zip
+*.tar.gz
+*.rar

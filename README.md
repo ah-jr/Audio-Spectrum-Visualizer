@@ -1,194 +1,179 @@
-# Audio Spectrum Visualizer
+# Audio Spectrum Visualizer & EQ
 
-A real-time audio spectrum visualizer built in C++ using FFT (Fast Fourier Transform) algorithm. Displays frequency content from 20Hz to 20,000Hz with multiple visualization styles and color themes.
+A real-time audio spectrum visualizer with 5-band parametric EQ, built in C++ using FFT. Available as both a **standalone application** and a **VST3 plugin**.
 
 ![Spectrum Visualizer](./demo.png)
 
 ## Features
 
-- **Real-time FFT Analysis**: Cooley-Tukey radix-2 FFT algorithm for efficient frequency analysis
-- **Wide Frequency Range**: 20Hz - 20kHz (full human hearing range)
-- **Multiple Visualization Styles**:
-  - Bars (classic spectrum analyzer)
-  - Waves (smooth waveform display)
-  - Circles (radial spectrum)
-  - Particles (particle-based reactive visualization)
-  - Mirror (symmetric horizontal display)
+### Spectrum Analyzer
+- **Real-time FFT Analysis**: Cooley-Tukey radix-2 algorithm (20Hz - 20kHz)
+- **Multiple Visualization Styles**: Line graph, Bars, Waves, Circles, Particles, Mirror
 - **Color Themes**: Cyberpunk, Neon, Sunset, Ocean, Monochrome
-- **Audio Format Support**: MP3, WAV, FLAC, OGG, M4A, AAC
-- **Interactive Controls**: Play/pause, seek, volume, style switching
-- **Drag & Drop**: Simply drop audio files onto the window
-- **Peak Indicators**: Visual peak hold with decay
-- **Frequency Grid**: Reference grid with frequency labels
+- **Audio Formats**: MP3, WAV, FLAC, OGG, M4A, AAC (standalone only)
+- **dB Scale**: Proper logarithmic display (-60dB to 0dB)
 
-## Dependencies
-
-- **CMake** 3.16 or higher
-- **C++17** compatible compiler
-- **raylib** (automatically downloaded via FetchContent)
-- **miniaudio** (automatically downloaded during build)
+### 5-Band Parametric EQ
+- **Bands**: 60Hz, 250Hz, 1kHz, 4kHz, 12kHz (fully adjustable)
+- **Controls per band**:
+  - **Gain**: -12dB to +12dB
+  - **Frequency**: 20Hz to 20kHz (drag horizontally)
+  - **Q Factor**: 0.1 to 10.0 (mouse scroll)
+- **Visual EQ Curve**: Real-time response visualization
+- **Biquad Filters**: High-quality parametric EQ processing
 
 ## Building
 
-### Windows (Visual Studio)
+### Prerequisites
+- CMake 3.16+
+- C++17 compatible compiler
+- (VST3 only) VST3 SDK (must be downloaded manually)
+
+### Standalone Application
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd fft
+mkdir build && cd build
 
-# Create build directory
-mkdir build
-cd build
-
-# Generate Visual Studio project
-cmake .. -G "Visual Studio 17 2022"
-
-# Build
+# Windows (Visual Studio)
+cmake .. -G "Visual Studio 17 2022" -DBUILD_STANDALONE=ON
 cmake --build . --config Release
 
-# Run
-./Release/AudioSpectrumVisualizer.exe path/to/audio.mp3
-```
-
-### Windows (MinGW)
-
-```bash
-mkdir build
-cd build
-cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+# Linux/macOS
+cmake .. -DBUILD_STANDALONE=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build .
-./AudioSpectrumVisualizer.exe path/to/audio.mp3
 ```
 
-### Linux
+Run: `./Release/AudioSpectrumVisualizer.exe [audio_file.mp3]`
+
+### VST3 Plugin
+
+The VST3 plugin uses a custom OpenGL renderer (no VSTGUI dependency), providing the same visual appearance as the standalone application.
+
+**Step 1: Download VST3 SDK** (required)
 
 ```bash
-# Install dependencies (Ubuntu/Debian)
-sudo apt install build-essential cmake git libgl1-mesa-dev libx11-dev libxrandr-dev libxi-dev
-
-mkdir build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . -j$(nproc)
-./AudioSpectrumVisualizer path/to/audio.mp3
+# Clone into external folder (auto-detected)
+cd fft
+git clone --recursive https://github.com/steinbergmedia/vst3sdk.git external/vst3sdk
 ```
 
-### macOS
+> **Important**: The `--recursive` flag is required to fetch the base/pluginterfaces submodules!
+
+> **Note**: VSTGUI is NOT required. The plugin uses custom OpenGL rendering.
+
+**Step 2: Build the plugin**
 
 ```bash
-# Install Xcode command line tools
-xcode-select --install
+# Clean any previous build first
+rd /s /q build
+mkdir build && cd build
 
-mkdir build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . -j$(sysctl -n hw.ncpu)
-./AudioSpectrumVisualizer path/to/audio.mp3
+# Windows (Visual Studio)
+cmake .. -G "Visual Studio 17 2022" -DBUILD_VST3=ON -DBUILD_STANDALONE=OFF
+cmake --build . --config Release
+
+# Or specify SDK path explicitly if not in external/vst3sdk
+cmake .. -G "Visual Studio 17 2022" -DBUILD_VST3=ON -DVST3_SDK_ROOT="C:/path/to/vst3sdk"
+cmake --build . --config Release
 ```
 
-## Usage
+**Step 3: Install the plugin**
+
+The plugin is built at: `build/VST3/Release/SpectrumEQ.vst3`
+
+Copy the entire `SpectrumEQ.vst3` folder to your DAW's VST3 folder:
+- **Windows**: `C:\Program Files\Common Files\VST3\`
+- **macOS**: `~/Library/Audio/Plug-Ins/VST3/`
+- **Linux**: `~/.vst3/`
+
+Then rescan plugins in your DAW.
+
+### Build Both
 
 ```bash
-# Run with an audio file
-./AudioSpectrumVisualizer music.mp3
-
-# Or run without arguments and use the file dialog
-./AudioSpectrumVisualizer
+cmake .. -DBUILD_STANDALONE=ON -DBUILD_VST3=ON
+cmake --build . --config Release
 ```
 
-## Controls
+## Standalone Controls
 
 | Key | Action |
 |-----|--------|
 | `SPACE` | Play / Pause |
-| `←` / `→` | Seek backward / forward (5 seconds) |
-| `T` | Cycle color themes |
+| `←` / `→` | Seek ±5 seconds |
 | `S` | Cycle visualization styles |
-| `G` | Toggle frequency grid |
-| `P` | Toggle peak indicators |
-| `M` | Toggle vertical mirror mode |
-| `I` | Toggle info display |
+| `T` | Cycle color themes |
+| `E` | Toggle EQ on/off |
+| `R` | Reset EQ to defaults |
 | `O` | Open file dialog |
 | `ESC` | Exit |
 
-**Mouse**: Click on the progress bar to seek to a position.
-
-**Drag & Drop**: Drop audio files directly onto the window to load them.
+### EQ Controls (Line Mode)
+- **Drag knobs** horizontally to change frequency
+- **Drag knobs** vertically to change gain
+- **Scroll wheel** on knobs to adjust Q (bandwidth)
+- Gain snaps to 0dB when close
 
 ## Project Structure
 
 ```
 fft/
-├── CMakeLists.txt          # Build configuration
-├── README.md               # This file
-├── external/               # External dependencies
-│   └── miniaudio.h         # (downloaded automatically)
-└── src/
-    ├── main.cpp            # Application entry point
-    ├── fft.hpp             # FFT algorithm header
-    ├── fft.cpp             # FFT implementation
-    ├── audio_analyzer.hpp  # Audio loading/analysis header
-    ├── audio_analyzer.cpp  # Audio loading/analysis implementation
-    ├── spectrum_visualizer.hpp  # Visualization header
-    └── spectrum_visualizer.cpp  # Visualization implementation
+├── CMakeLists.txt              # Unified build (standalone + VST)
+├── src/
+│   ├── main.cpp                # Standalone entry point
+│   ├── fft.hpp/cpp             # FFT algorithm (shared)
+│   ├── eq_processor.hpp        # EQ processor (shared, header-only)
+│   ├── audio_analyzer.hpp/cpp  # Audio loading/playback
+│   ├── spectrum_visualizer.*   # Visualization + EQ UI (raylib)
+│   └── file_dialog.*           # Native file dialogs
+├── vst/
+│   ├── plugin_processor.*      # VST3 audio processor
+│   ├── plugin_controller.*     # VST3 parameter controller
+│   ├── plugin_editor.*         # VST3 editor UI (OpenGL)
+│   ├── gl_renderer.*           # OpenGL renderer (raylib-compatible API)
+│   ├── plugin_entry.cpp        # VST3 factory
+│   └── plugin_ids.hpp          # Parameter IDs
+└── external/
+    ├── miniaudio.h             # Audio library (auto-downloaded)
+    └── vst3sdk/                # VST3 SDK (manual download)
 ```
 
 ## Technical Details
 
-### FFT Implementation
+### FFT
+- **Size**: 8192 samples (configurable)
+- **Window**: Hann
+- **Frequency Resolution**: ~5.4 Hz at 44.1kHz
 
-The project uses a custom implementation of the Cooley-Tukey FFT algorithm:
-- Radix-2 decimation-in-time (DIT) approach
-- In-place computation with bit-reversal permutation
-- Supports window functions: Hann, Hamming, Blackman
-- Configurable FFT size (default: 4096 samples)
+### EQ Processing
+- **Filter Type**: Biquad peaking EQ
+- **Algorithm**: Direct Form II Transposed
+- **Processing**: 64-bit internal, 32-bit I/O
 
-### Audio Processing
+### VST3 Plugin
+- **Format**: VST3
+- **Channels**: Stereo (2 in / 2 out)
+- **Parameters**: 16 (5 bands × 3 params + bypass)
+- **Automation**: Full parameter automation support
+- **State**: Preset save/load supported
+- **UI**: Custom OpenGL renderer (no VSTGUI dependency)
+- **Same visual appearance** as standalone application
 
-- **Sample Rate**: Adapts to source file (typically 44.1kHz or 48kHz)
-- **FFT Window**: 4096 samples (~93ms at 44.1kHz)
-- **Frequency Resolution**: ~10.8 Hz per bin at 44.1kHz
-- **Frequency Bands**: 128 logarithmically-spaced bands
-- **Smoothing**: Temporal smoothing with configurable decay
+## Dependencies
 
-### Visualization
-
-- **Frame Rate**: 60 FPS target
-- **Rendering**: raylib with hardware acceleration
-- **Anti-aliasing**: 4x MSAA
-- **Dynamic Range**: Logarithmic magnitude scaling
-
-## Configuration
-
-The analyzer and visualizer can be configured programmatically:
-
-```cpp
-// Analyzer configuration
-audio::AnalyzerConfig analyzerConfig;
-analyzerConfig.fftSize = 4096;           // FFT window size
-analyzerConfig.numBands = 128;           // Number of frequency bands
-analyzerConfig.minFrequency = 20.0;      // Min frequency (Hz)
-analyzerConfig.maxFrequency = 20000.0;   // Max frequency (Hz)
-analyzerConfig.smoothingFactor = 0.75;   // Temporal smoothing
-analyzerConfig.useLogScale = true;       // Logarithmic frequency scale
-
-// Visualizer configuration
-viz::VisualizerConfig vizConfig;
-vizConfig.windowWidth = 1280;
-vizConfig.windowHeight = 720;
-vizConfig.sensitivity = 2.0f;            // Visual sensitivity
-vizConfig.showPeaks = true;              // Show peak indicators
-vizConfig.showGrid = true;               // Show frequency grid
-```
+| Component | Library | Notes |
+|-----------|---------|-------|
+| Standalone Audio | miniaudio | Auto-downloaded |
+| Standalone Graphics | raylib 5.5 | Auto-downloaded |
+| VST3 Plugin | VST3 SDK | Manual download (base + pluginterfaces only) |
+| VST3 UI | OpenGL | System library (no VSTGUI needed) |
 
 ## License
 
-This project is open source. Feel free to use, modify, and distribute.
+Open source. Feel free to use, modify, and distribute.
 
 ## Acknowledgments
 
-- [raylib](https://www.raylib.com/) - Simple and easy-to-use graphics library
-- [miniaudio](https://miniaud.io/) - Single-header audio playback and capture library
-
-
+- [raylib](https://www.raylib.com/) - Graphics library
+- [miniaudio](https://miniaud.io/) - Audio library
+- [Steinberg VST3 SDK](https://github.com/steinbergmedia/vst3sdk) - Plugin SDK
