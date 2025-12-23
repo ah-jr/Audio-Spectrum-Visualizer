@@ -1,0 +1,46 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# IDE files
+.vs/
+.vscode/
+*.vcxproj*
+*.sln
+.idea/
+*.user
+
+# Compiled files
+*.exe
+*.dll
+*.so
+*.dylib
+*.obj
+*.o
+*.a
+*.lib
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# External dependencies (downloaded automatically)
+external/miniaudio.h
+
+# Audio files (for testing)
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.m4a
+*.aac
+
+# OS files
+.DS_Store
+Thumbs.db
+
+
