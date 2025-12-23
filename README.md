@@ -24,6 +24,24 @@ A real-time audio spectrum visualizer with 5-band parametric EQ, built in C++ us
 
 ## Building
 
+### Quick Start (Windows)
+
+```bash
+mkdir build && cd build
+
+# Standalone only (default)
+cmake .. -G "Visual Studio 17 2022"
+cmake --build . --config Release
+
+# VST3 only (requires VST3 SDK - see below)
+cmake .. -G "Visual Studio 17 2022" -DBUILD_VST3=ON -DBUILD_STANDALONE=OFF
+cmake --build . --config Release
+
+# Both standalone + VST3
+cmake .. -G "Visual Studio 17 2022" -DBUILD_ALL=ON
+cmake --build . --config Release
+```
+
 ### Prerequisites
 - CMake 3.16+
 - C++17 compatible compiler
@@ -88,12 +106,21 @@ Copy the entire `SpectrumEQ.vst3` folder to your DAW's VST3 folder:
 
 Then rescan plugins in your DAW.
 
-### Build Both
+### Build Both (Standalone + VST3)
 
 ```bash
-cmake .. -DBUILD_STANDALONE=ON -DBUILD_VST3=ON
+mkdir build && cd build
+
+# Using BUILD_ALL (recommended)
+cmake .. -G "Visual Studio 17 2022" -DBUILD_ALL=ON
+cmake --build . --config Release
+
+# Or enable both explicitly
+cmake .. -G "Visual Studio 17 2022" -DBUILD_STANDALONE=ON -DBUILD_VST3=ON
 cmake --build . --config Release
 ```
+
+> **Note**: Building VST3 requires the VST3 SDK. See the [VST3 Plugin](#vst3-plugin) section for setup instructions.
 
 ## Standalone Controls
 
@@ -123,6 +150,7 @@ fft/
 │   ├── main.cpp                # Standalone entry point
 │   ├── fft.hpp/cpp             # FFT algorithm (shared)
 │   ├── eq_processor.hpp        # EQ processor (shared, header-only)
+│   ├── shared_colors.hpp       # Color themes (shared between standalone/VST)
 │   ├── audio_analyzer.hpp/cpp  # Audio loading/playback
 │   ├── spectrum_visualizer.*   # Visualization + EQ UI (raylib)
 │   └── file_dialog.*           # Native file dialogs

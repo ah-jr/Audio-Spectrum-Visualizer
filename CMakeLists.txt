@@ -15,6 +15,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Build options
 option(BUILD_STANDALONE "Build standalone application" ON)
 option(BUILD_VST3 "Build VST3 plugin" OFF)
+option(BUILD_ALL "Build both standalone and VST3" OFF)
+
+# BUILD_ALL enables both targets
+if(BUILD_ALL)
+    set(BUILD_STANDALONE ON CACHE BOOL "" FORCE)
+    set(BUILD_VST3 ON CACHE BOOL "" FORCE)
+endif()
 
 # ============================================================================
 # Core library (shared between standalone and VST)
@@ -26,6 +33,7 @@ set(CORE_SOURCES
 set(CORE_HEADERS
     src/fft.hpp
     src/eq_processor.hpp
+    src/shared_colors.hpp
 )
 
 add_library(SpectrumCore STATIC ${CORE_SOURCES} ${CORE_HEADERS})

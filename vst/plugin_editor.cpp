@@ -11,6 +11,12 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+// Registry key for settings
+static const wchar_t* REGISTRY_KEY = L"SOFTWARE\\SpectrumEQ";
+static const wchar_t* REG_WINDOW_WIDTH = L"WindowWidth";
+static const wchar_t* REG_WINDOW_HEIGHT = L"WindowHeight";
+static const wchar_t* REG_THEME_INDEX = L"ThemeIndex";
+
 namespace SpectrumEQ {
 
 // Window class name
@@ -19,14 +25,16 @@ static std::atomic<int> windowClassRegistered{0};
 
 PluginEditor::PluginEditor(PluginController* controller) 
     : controller_(controller)
-    , theme_(ColorTheme::Neon())
 {
-    // Initialize EQ controls with default frequencies
-    const double defaultFreqs[] = {60.0, 250.0, 1000.0, 4000.0, 12000.0};
-    for (int i = 0; i < 5; ++i) {
-        eqControls_[i].frequency = static_cast<float>(defaultFreqs[i]);
+    // Load settings from registry (theme, window size)
+    loadSettings();
+    theme_ = ColorTheme::byIndex(themeIndex_);
+    
+    // Initialize EQ controls using shared constants
+    for (int i = 0; i < eq::NUM_BANDS; ++i) {
+        eqControls_[i].frequency = static_cast<float>(eq::DEFAULT_FREQUENCIES[i]);
         eqControls_[i].gain = 0.0f;
-        eqControls_[i].q = 0.707f;
+        eqControls_[i].q = static_cast<float>(eq::DEFAULT_Q);
     }
     
     spectrum_.resize(256, 0.0f);
@@ -35,6 +43,10 @@ PluginEditor::PluginEditor(PluginController* controller)
 }
 
 PluginEditor::~PluginEditor() {
+    // Notify controller we're being destroyed
+    if (controller_) {
+        controller_->removeEditor(this);
+    }
     destroyWindow();
 }
 
@@ -103,6 +115,9 @@ Steinberg::tresult PLUGIN_API PluginEditor::attached(void* parent, Steinberg::FI
 
 Steinberg::tresult PLUGIN_API PluginEditor::removed() {
 #ifdef _WIN32
+    // Save settings before closing
+    saveSettings();
+    
     if (timerId_) {
         KillTimer(hwnd_, TIMER_ID);
         timerId_ = 0;
@@ -363,6 +378,23 @@ LRESULT PluginEditor::handleMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
             height_ = HIWORD(lParam);
             renderer_.resize(width_, height_);
             return 0;
+            
+        case WM_KEYDOWN:
+            // 'T' key to cycle themes (alternative to dropdown)
+            if (wParam == 'T') {
+                themeIndex_ = (themeIndex_ + 1) % colors::themes::NUM_THEMES;
+                theme_ = ColorTheme::byIndex(themeIndex_);
+                themeDropdownOpen_ = false;
+            }
+            // 'E' key to toggle EQ bypass
+            else if (wParam == 'E') {
+                eqEnabled_ = !eqEnabled_;
+                if (controller_) {
+                    controller_->setParamNormalized(kBypass, eqEnabled_ ? 0.0 : 1.0);
+                    controller_->performEdit(kBypass, eqEnabled_ ? 0.0 : 1.0);
+                }
+            }
+            return 0;
     }
     
     return DefWindowProcW(hwnd_, msg, wParam, lParam);
@@ -404,8 +436,9 @@ void PluginEditor::render() {
     renderSpectrum();
     renderEQCurve();
     renderEQControls();
+    renderThemeSelector();
     
-    // EQ status badge
+    // EQ status badge (moved to right of theme selector)
     const char* eqLabel = eqEnabled_ ? "EQ" : "EQ OFF";
     gl::Color eqColor = eqEnabled_ ? theme_.accent : theme_.textDim;
     int eqWidth = renderer_.measureText(eqLabel, 11);
@@ -871,6 +904,45 @@ void PluginEditor::handleMouseMove(int x, int y) {
 void PluginEditor::handleMouseDown(int x, int y) {
     mouseDown_ = true;
     
+    // Theme dropdown handling
+    int selectorX = 10;
+    int selectorY = 8;
+    int selectorWidth = 120;
+    int itemHeight = 22;
+    
+    bool overThemeButton = (x >= selectorX && x < selectorX + selectorWidth &&
+                            y >= selectorY && y < selectorY + itemHeight);
+    
+    if (themeDropdownOpen_) {
+        // Check if clicking on a theme option
+        int dropdownY = selectorY + itemHeight + 2;
+        
+        for (int i = 0; i < colors::themes::NUM_THEMES; ++i) {
+            int itemY = dropdownY + 2 + i * itemHeight;
+            
+            if (x >= selectorX && x < selectorX + selectorWidth &&
+                y >= itemY && y < itemY + itemHeight) {
+                // Select this theme
+                themeIndex_ = i;
+                theme_ = ColorTheme::byIndex(themeIndex_);
+                themeDropdownOpen_ = false;
+                return;
+            }
+        }
+        
+        // Clicked outside dropdown - close it
+        themeDropdownOpen_ = false;
+        if (!overThemeButton) {
+            // Continue to check EQ controls
+        } else {
+            return;
+        }
+    } else if (overThemeButton) {
+        // Open dropdown
+        themeDropdownOpen_ = true;
+        return;
+    }
+    
     // Check if clicking on an EQ control
     for (int i = 0; i < 5; ++i) {
         if (eqControls_[i].hovered) {
@@ -975,6 +1047,179 @@ void PluginEditor::syncParametersFromController() {
     // Sync bypass state
     double bypassNorm = controller_->getParamNormalized(kBypass);
     eqEnabled_ = bypassNorm < 0.5;
+}
+
+void PluginEditor::onParameterChange(Steinberg::Vst::ParamID id, double normalizedValue) {
+    // Handle parameter changes from host/automation
+    float logFreqMin = std::log10(20.0f);
+    float logFreqMax = std::log10(20000.0f);
+    float logFreqRange = logFreqMax - logFreqMin;
+    
+    float dbMin = -12.0f;
+    float dbMax = 12.0f;
+    float dbRange = dbMax - dbMin;
+    
+    float qLogMin = std::log10(0.1f);
+    float qLogMax = std::log10(10.0f);
+    float qLogRange = qLogMax - qLogMin;
+    
+    // Check each band's parameters
+    for (int i = 0; i < 5; ++i) {
+        if (id == getBandGainParam(i)) {
+            eqControls_[i].gain = static_cast<float>(dbMin + normalizedValue * dbRange);
+            return;
+        }
+        if (id == getBandFreqParam(i)) {
+            eqControls_[i].frequency = std::pow(10.0f, logFreqMin + static_cast<float>(normalizedValue) * logFreqRange);
+            return;
+        }
+        if (id == getBandQParam(i)) {
+            eqControls_[i].q = std::pow(10.0f, qLogMin + static_cast<float>(normalizedValue) * qLogRange);
+            return;
+        }
+    }
+    
+    // Check bypass
+    if (id == kBypass) {
+        eqEnabled_ = normalizedValue < 0.5;
+    }
+}
+
+void PluginEditor::loadSettings() {
+#ifdef _WIN32
+    HKEY hKey;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, REGISTRY_KEY, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD value, size = sizeof(DWORD);
+        
+        if (RegQueryValueExW(hKey, REG_WINDOW_WIDTH, nullptr, nullptr, 
+                             reinterpret_cast<LPBYTE>(&value), &size) == ERROR_SUCCESS) {
+            width_ = static_cast<int>(value);
+        }
+        
+        size = sizeof(DWORD);
+        if (RegQueryValueExW(hKey, REG_WINDOW_HEIGHT, nullptr, nullptr,
+                             reinterpret_cast<LPBYTE>(&value), &size) == ERROR_SUCCESS) {
+            height_ = static_cast<int>(value);
+        }
+        
+        size = sizeof(DWORD);
+        if (RegQueryValueExW(hKey, REG_THEME_INDEX, nullptr, nullptr,
+                             reinterpret_cast<LPBYTE>(&value), &size) == ERROR_SUCCESS) {
+            themeIndex_ = static_cast<int>(value) % colors::themes::NUM_THEMES;
+        }
+        
+        RegCloseKey(hKey);
+        settingsLoaded_ = true;
+    }
+    
+    // Enforce minimum size
+    if (width_ < 600) width_ = 800;
+    if (height_ < 350) height_ = 450;
+#endif
+}
+
+void PluginEditor::saveSettings() {
+#ifdef _WIN32
+    HKEY hKey;
+    DWORD disposition;
+    
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, REGISTRY_KEY, 0, nullptr,
+                        REG_OPTION_NON_VOLATILE, KEY_WRITE, nullptr,
+                        &hKey, &disposition) == ERROR_SUCCESS) {
+        DWORD value;
+        
+        value = static_cast<DWORD>(width_);
+        RegSetValueExW(hKey, REG_WINDOW_WIDTH, 0, REG_DWORD,
+                       reinterpret_cast<const BYTE*>(&value), sizeof(DWORD));
+        
+        value = static_cast<DWORD>(height_);
+        RegSetValueExW(hKey, REG_WINDOW_HEIGHT, 0, REG_DWORD,
+                       reinterpret_cast<const BYTE*>(&value), sizeof(DWORD));
+        
+        value = static_cast<DWORD>(themeIndex_);
+        RegSetValueExW(hKey, REG_THEME_INDEX, 0, REG_DWORD,
+                       reinterpret_cast<const BYTE*>(&value), sizeof(DWORD));
+        
+        RegCloseKey(hKey);
+    }
+#endif
+}
+
+void PluginEditor::renderThemeSelector() {
+    // Theme selector in top-left corner
+    int selectorX = 10;
+    int selectorY = 8;
+    int selectorWidth = 120;
+    int itemHeight = 22;
+    
+    // Current theme button
+    const char* currentTheme = colors::themes::getThemeName(themeIndex_);
+    
+    gl::Rectangle btnRect(static_cast<float>(selectorX), static_cast<float>(selectorY),
+                          static_cast<float>(selectorWidth), static_cast<float>(itemHeight));
+    
+    // Check if mouse is over button
+    bool overButton = (mouseX_ >= selectorX && mouseX_ < selectorX + selectorWidth &&
+                       mouseY_ >= selectorY && mouseY_ < selectorY + itemHeight);
+    
+    // Draw button background
+    gl::Color btnBg = overButton ? gl::Renderer::fade(theme_.accent, 0.3f) 
+                                  : gl::Renderer::fade(theme_.textDim, 0.2f);
+    renderer_.drawRectangleRounded(btnRect, 0.3f, 4, btnBg);
+    renderer_.drawRectangleRoundedLines(btnRect, 0.3f, 4, theme_.textDim);
+    
+    // Draw current theme name
+    renderer_.drawText(currentTheme, selectorX + 10, selectorY + 5, 12, theme_.text);
+    
+    // Draw dropdown arrow
+    int arrowX = selectorX + selectorWidth - 18;
+    int arrowY = selectorY + 10;
+    renderer_.drawTriangle(
+        {static_cast<float>(arrowX), static_cast<float>(arrowY)},
+        {static_cast<float>(arrowX + 10), static_cast<float>(arrowY)},
+        {static_cast<float>(arrowX + 5), static_cast<float>(arrowY + 6)},
+        theme_.text
+    );
+    
+    // Draw dropdown if open
+    if (themeDropdownOpen_) {
+        int dropdownY = selectorY + itemHeight + 2;
+        
+        // Dropdown background
+        gl::Rectangle dropBg(static_cast<float>(selectorX), static_cast<float>(dropdownY),
+                             static_cast<float>(selectorWidth), 
+                             static_cast<float>(colors::themes::NUM_THEMES * itemHeight + 4));
+        renderer_.drawRectangleRounded(dropBg, 0.2f, 4, gl::Renderer::fade(theme_.background, 0.95f));
+        renderer_.drawRectangleRoundedLines(dropBg, 0.2f, 4, theme_.textDim);
+        
+        // Draw each theme option
+        for (int i = 0; i < colors::themes::NUM_THEMES; ++i) {
+            int itemY = dropdownY + 2 + i * itemHeight;
+            
+            bool overItem = (mouseX_ >= selectorX && mouseX_ < selectorX + selectorWidth &&
+                            mouseY_ >= itemY && mouseY_ < itemY + itemHeight);
+            
+            if (overItem) {
+                gl::Rectangle itemRect(static_cast<float>(selectorX + 2), static_cast<float>(itemY),
+                                       static_cast<float>(selectorWidth - 4), static_cast<float>(itemHeight));
+                renderer_.drawRectangleRounded(itemRect, 0.3f, 4, gl::Renderer::fade(theme_.accent, 0.3f));
+            }
+            
+            // Theme name with color preview
+            const char* themeName = colors::themes::getThemeName(i);
+            const auto& themeData = colors::themes::getTheme(i);
+            
+            // Color swatch
+            gl::Color swatch = {themeData.barLow.r, themeData.barLow.g, themeData.barLow.b, 255};
+            gl::Rectangle swatchRect(static_cast<float>(selectorX + 8), static_cast<float>(itemY + 5),
+                                     12.0f, 12.0f);
+            renderer_.drawRectangleRounded(swatchRect, 0.5f, 4, swatch);
+            
+            // Theme name
+            gl::Color textColor = (i == themeIndex_) ? theme_.accent : theme_.text;
+            renderer_.drawText(themeName, selectorX + 26, itemY + 5, 12, textColor);
+        }
+    }
 }
 
 } // namespace SpectrumEQ

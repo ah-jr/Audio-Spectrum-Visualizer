@@ -1,5 +1,6 @@
 #pragma once
 
+#include "eq_processor.hpp"  // For shared EQ constants
 #include <vector>
 #include <string>
 #include <memory>
@@ -23,21 +24,21 @@ struct EQBand {
     double q;            // Q factor (bandwidth)
     bool enabled;
     
-    EQBand(double freq = 1000.0, double g = 0.0, double qFactor = 1.0)
+    EQBand(double freq = 1000.0, double g = 0.0, double qFactor = eq::DEFAULT_Q)
         : frequency(freq), gain(g), q(qFactor), enabled(true) {}
 };
 
 /**
- * 5-band Equalizer configuration
+ * 5-band Equalizer configuration (uses shared constants)
  */
 struct EqualizerConfig {
-    static constexpr int NUM_BANDS = 5;
+    static constexpr int NUM_BANDS = eq::NUM_BANDS;
     EQBand bands[NUM_BANDS] = {
-        EQBand(60.0, 0.0, 0.7),      // Sub/Bass
-        EQBand(250.0, 0.0, 0.7),     // Low-Mid
-        EQBand(1000.0, 0.0, 0.7),    // Mid
-        EQBand(4000.0, 0.0, 0.7),    // High-Mid
-        EQBand(12000.0, 0.0, 0.7)    // Treble
+        EQBand(eq::DEFAULT_FREQUENCIES[0], 0.0, eq::DEFAULT_Q),  // Sub/Bass
+        EQBand(eq::DEFAULT_FREQUENCIES[1], 0.0, eq::DEFAULT_Q),  // Low-Mid
+        EQBand(eq::DEFAULT_FREQUENCIES[2], 0.0, eq::DEFAULT_Q),  // Mid
+        EQBand(eq::DEFAULT_FREQUENCIES[3], 0.0, eq::DEFAULT_Q),  // High-Mid
+        EQBand(eq::DEFAULT_FREQUENCIES[4], 0.0, eq::DEFAULT_Q)   // Treble
     };
     bool enabled = true;
 };

@@ -64,7 +64,35 @@ Steinberg::tresult PLUGIN_API PluginController::initialize(Steinberg::FUnknown* 
 }
 
 Steinberg::tresult PLUGIN_API PluginController::terminate() {
+    std::lock_guard<std::mutex> lock(editorMutex_);
+    editor_ = nullptr;
     return EditController::terminate();
+}
+
+void PluginController::setEditor(PluginEditor* editor) {
+    std::lock_guard<std::mutex> lock(editorMutex_);
+    editor_ = editor;
+}
+
+void PluginController::removeEditor(PluginEditor* editor) {
+    std::lock_guard<std::mutex> lock(editorMutex_);
+    if (editor_ == editor) {
+        editor_ = nullptr;
+    }
+}
+
+Steinberg::tresult PLUGIN_API PluginController::setParamNormalized(Steinberg::Vst::ParamID tag, 
+                                                                    Steinberg::Vst::ParamValue value) {
+    // Call base class first
+    Steinberg::tresult result = EditController::setParamNormalized(tag, value);
+    
+    // Notify editor of parameter change (for automation sync)
+    std::lock_guard<std::mutex> lock(editorMutex_);
+    if (editor_) {
+        editor_->onParameterChange(tag, value);
+    }
+    
+    return result;
 }
 
 Steinberg::tresult PLUGIN_API PluginController::setComponentState(Steinberg::IBStream* state) {
@@ -110,6 +138,7 @@ Steinberg::tresult PLUGIN_API PluginController::setComponentState(Steinberg::IBS
 Steinberg::IPlugView* PLUGIN_API PluginController::createView(Steinberg::FIDString name) {
     if (Steinberg::FIDStringsEqual(name, Steinberg::Vst::ViewType::kEditor)) {
         auto* editor = new PluginEditor(this);
+        setEditor(editor);
         return editor;
     }
     return nullptr;

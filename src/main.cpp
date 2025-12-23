@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
     vizConfig.windowHeight = 720;
     vizConfig.targetFps = 60;
     vizConfig.style = viz::VisualizerStyle::Line;  // Default to line style
-    vizConfig.theme = viz::ColorTheme::Sunset();     // Green theme like the reference
+    vizConfig.theme = viz::ColorTheme::Sunset();   
     vizConfig.sensitivity = 1.0f;                   // Proper dB scaling
     vizConfig.showPeaks = true;
     vizConfig.showGrid = true;

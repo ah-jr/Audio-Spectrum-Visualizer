@@ -48,7 +48,7 @@ external/vst3sdk/
 *.vst3
 VST3/
 
-# Audio files (for testing)
+# Audio files (for  testing)
 *.mp3
 *.wav
 *.flac

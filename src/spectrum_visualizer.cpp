@@ -1,4 +1,6 @@
 #include "spectrum_visualizer.hpp"
+#include "shared_colors.hpp"
+#include "eq_processor.hpp"
 #include <cmath>
 #include <algorithm>
 #include <sstream>
@@ -11,66 +13,30 @@
 
 namespace viz {
 
-// Color theme implementations
-ColorTheme ColorTheme::Neon() {
+// Helper to convert shared RGBA to raylib Color
+static Color toRaylibColor(const colors::RGBA& c) {
+    return {c.r, c.g, c.b, c.a};
+}
+
+// Helper to convert shared ThemeColors to ColorTheme
+static ColorTheme fromSharedTheme(const colors::ThemeColors& t) {
     return {
-        {20, 25, 20, 255},       // background - dark gray-green
-        {0, 220, 60, 255},       // barLow - bright green
-        {50, 255, 100, 255},     // barMid - lighter green
-        {150, 255, 150, 255},    // barHigh - pale green
-        {200, 255, 200, 255},    // accent - white-green
-        {220, 255, 220, 255},    // text - light green tint
-        {80, 120, 80, 255}       // textDim - dim green
+        toRaylibColor(t.background),
+        toRaylibColor(t.barLow),
+        toRaylibColor(t.barMid),
+        toRaylibColor(t.barHigh),
+        toRaylibColor(t.accent),
+        toRaylibColor(t.text),
+        toRaylibColor(t.textDim)
     };
 }
 
-ColorTheme ColorTheme::Sunset() {
-    return {
-        {25, 20, 35, 255},       // background
-        {255, 100, 50, 255},     // barLow - orange
-        {255, 50, 100, 255},     // barMid - coral
-        {180, 50, 255, 255},     // barHigh - purple
-        {255, 200, 100, 255},    // accent
-        {255, 240, 230, 255},    // text
-        {140, 120, 130, 255}     // textDim
-    };
-}
-
-ColorTheme ColorTheme::Ocean() {
-    return {
-        {10, 25, 40, 255},       // background - deep ocean
-        {0, 180, 180, 255},      // barLow - teal
-        {0, 120, 255, 255},      // barMid - ocean blue
-        {100, 200, 255, 255},    // barHigh - light blue
-        {0, 255, 200, 255},      // accent - aqua
-        {200, 230, 255, 255},    // text
-        {80, 120, 150, 255}      // textDim
-    };
-}
-
-ColorTheme ColorTheme::Monochrome() {
-    return {
-        {10, 10, 10, 255},       // background
-        {100, 100, 100, 255},    // barLow
-        {180, 180, 180, 255},    // barMid
-        {255, 255, 255, 255},    // barHigh
-        {200, 200, 200, 255},    // accent
-        {255, 255, 255, 255},    // text
-        {100, 100, 100, 255}     // textDim
-    };
-}
-
-ColorTheme ColorTheme::Cyberpunk() {
-    return {
-        {13, 2, 33, 255},        // background - dark purple
-        {255, 0, 110, 255},      // barLow - hot pink
-        {0, 255, 255, 255},      // barMid - cyan
-        {255, 255, 0, 255},      // barHigh - yellow
-        {255, 0, 255, 255},      // accent - magenta
-        {0, 255, 255, 255},      // text - cyan
-        {100, 80, 120, 255}      // textDim
-    };
-}
+// Color theme implementations using shared colors
+ColorTheme ColorTheme::Neon() { return fromSharedTheme(colors::themes::Neon); }
+ColorTheme ColorTheme::Sunset() { return fromSharedTheme(colors::themes::Sunset); }
+ColorTheme ColorTheme::Ocean() { return fromSharedTheme(colors::themes::Ocean); }
+ColorTheme ColorTheme::Monochrome() { return fromSharedTheme(colors::themes::Monochrome); }
+ColorTheme ColorTheme::Cyberpunk() { return fromSharedTheme(colors::themes::Cyberpunk); }
 
 SpectrumVisualizer::SpectrumVisualizer() {
     // Initialize theme list
@@ -171,11 +137,10 @@ void SpectrumVisualizer::handleInput(audio::AudioAnalyzer& analyzer) {
     
     // R - reset EQ to defaults
     if (IsKeyPressed(KEY_R)) {
-        const double defaultFreqs[] = {60.0, 250.0, 1000.0, 4000.0, 12000.0};
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < eq::NUM_BANDS; ++i) {
             analyzer.setEQBandGain(i, 0.0);
-            analyzer.setEQBandFrequency(i, defaultFreqs[i]);
-            analyzer.setEQBandQ(i, 0.7);
+            analyzer.setEQBandFrequency(i, eq::DEFAULT_FREQUENCIES[i]);
+            analyzer.setEQBandQ(i, eq::DEFAULT_Q);
         }
     }
     

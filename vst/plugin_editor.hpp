@@ -7,9 +7,11 @@
 
 #include "pluginterfaces/gui/iplugview.h"
 #include "pluginterfaces/base/funknown.h"
+#include "pluginterfaces/vst/vsttypes.h"
 #include "gl_renderer.hpp"
 #include "eq_processor.hpp"
 #include "fft.hpp"
+#include "shared_colors.hpp"
 #include <vector>
 #include <mutex>
 #include <atomic>
@@ -29,7 +31,7 @@ namespace SpectrumEQ {
 // Forward declaration
 class PluginController;
 
-// Color theme (matching raylib version)
+// Color theme using shared colors
 struct ColorTheme {
     gl::Color background;
     gl::Color barLow;
@@ -39,17 +41,28 @@ struct ColorTheme {
     gl::Color text;
     gl::Color textDim;
     
-    static ColorTheme Neon() {
+    // Convert from shared theme
+    static ColorTheme fromShared(const colors::ThemeColors& t) {
         return {
-            {20, 25, 20, 255},
-            {0, 220, 60, 255},
-            {50, 255, 100, 255},
-            {150, 255, 150, 255},
-            {200, 255, 200, 255},
-            {220, 255, 220, 255},
-            {80, 120, 80, 255}
+            {t.background.r, t.background.g, t.background.b, t.background.a},
+            {t.barLow.r, t.barLow.g, t.barLow.b, t.barLow.a},
+            {t.barMid.r, t.barMid.g, t.barMid.b, t.barMid.a},
+            {t.barHigh.r, t.barHigh.g, t.barHigh.b, t.barHigh.a},
+            {t.accent.r, t.accent.g, t.accent.b, t.accent.a},
+            {t.text.r, t.text.g, t.text.b, t.text.a},
+            {t.textDim.r, t.textDim.g, t.textDim.b, t.textDim.a}
         };
     }
+    
+    // Theme factories using shared colors
+    static ColorTheme Cyberpunk() { return fromShared(colors::themes::Cyberpunk); }
+    static ColorTheme Neon() { return fromShared(colors::themes::Neon); }
+    static ColorTheme Sunset() { return fromShared(colors::themes::Sunset); }
+    static ColorTheme Ocean() { return fromShared(colors::themes::Ocean); }
+    static ColorTheme Monochrome() { return fromShared(colors::themes::Monochrome); }
+    
+    // Get theme by index (matching shared order)
+    static ColorTheme byIndex(int index) { return fromShared(colors::themes::getTheme(index)); }
 };
 
 // EQ Control state
@@ -93,9 +106,12 @@ public:
     // Spectrum data update (called from processor)
     void updateSpectrum(const std::vector<float>& spectrum);
     
-    // EQ parameter update (called from controller)
+    // EQ parameter update (called from controller for automation)
     void updateEQParameter(int band, double gain, double freq, double q);
     void setBypass(bool bypass);
+    
+    // Called when parameters change from host/automation
+    void onParameterChange(Steinberg::Vst::ParamID id, double normalizedValue);
     
 private:
     // Win32 window handling
@@ -113,6 +129,7 @@ private:
     void renderEQControls();
     void renderEQCurve();
     void renderGrid();
+    void renderThemeSelector();
     
     // Input handling
     void handleMouseMove(int x, int y);
@@ -122,6 +139,10 @@ private:
     
     // Parameter sync
     void syncParametersFromController();
+    
+    // Settings persistence (registry)
+    void loadSettings();
+    void saveSettings();
     
     // Utilities
     gl::Color getBarColor(float normalizedFreq, float magnitude) const;
@@ -144,10 +165,13 @@ private:
     // Renderer
     gl::Renderer renderer_;
     ColorTheme theme_;
+    int themeIndex_ = 2;  // Default to Sunset (matches standalone)
+    bool themeDropdownOpen_ = false;
     
     // Size
-    int width_ = 800;
-    int height_ = 450;
+    int width_ = 1280;
+    int height_ = 720;
+    bool settingsLoaded_ = false;
     
     // Spectrum data
     std::vector<float> spectrum_;
